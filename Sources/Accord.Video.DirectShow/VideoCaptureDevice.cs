@@ -1113,7 +1113,7 @@ namespace Accord.Video.DirectShow
                     {
                         VideoControlFlags caps;
                         videoControl.GetCaps(pinStillImage, out caps);
-                        isSnapshotSupported = ((caps & VideoControlFlags.ExternalTriggerEnable) != 0);
+                        isSnapshotSupported = ((caps & (VideoControlFlags.ExternalTriggerEnable | VideoControlFlags.Trigger)) != 0);
                     }
                 }
 
