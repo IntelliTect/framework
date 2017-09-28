@@ -6,15 +6,15 @@
 // contacts@aforgenet.com
 //
 
+using System.Collections.Generic;
+using System.Linq;
+
 namespace Accord.Video.DirectShow
 {
     using System;
-    using System.Collections.Generic;
     using System.Drawing;
     using System.Runtime.InteropServices;
-
-    using Accord.Video;
-    using Accord.Video.DirectShow.Internals;
+    using Internals;
 
     /// <summary>
     /// Capabilities of video device such as frame size and frame rate.
@@ -50,6 +50,8 @@ namespace Accord.Video.DirectShow
         /// </summary>
         public readonly int MaximumFrameRate;
 
+        public readonly Guid SubType;
+
         /// <summary>
         /// Number of bits per pixel provided by the camera.
         /// </summary>
@@ -60,7 +62,7 @@ namespace Accord.Video.DirectShow
         }
 
         // Retrieve capabilities of a video device
-        static internal VideoCapabilities[] FromStreamConfig(IAMStreamConfig videoStreamConfig)
+        internal static VideoCapabilities[] FromStreamConfig(IAMStreamConfig videoStreamConfig)
         {
             if (videoStreamConfig == null)
                 throw new ArgumentNullException("videoStreamConfig");
@@ -79,38 +81,21 @@ namespace Accord.Video.DirectShow
                 throw new NotSupportedException("Unable to retrieve video device capabilities. This video device requires a larger VideoStreamConfigCaps structure.");
 
             // group capabilities with similar parameters
-            Dictionary<uint, VideoCapabilities> videocapsList = new Dictionary<uint, VideoCapabilities>();
+            var hashSet = new HashSet<VideoCapabilities>();
 
             for (int i = 0; i < count; i++)
             {
                 try
                 {
                     VideoCapabilities vc = new VideoCapabilities(videoStreamConfig, i);
-
-                    uint key = (((uint)vc.FrameSize.Height) << 32) |
-                               (((uint)vc.FrameSize.Width) << 16);
-
-                    if (!videocapsList.ContainsKey(key))
-                    {
-                        videocapsList.Add(key, vc);
-                    }
-                    else
-                    {
-                        if (vc.BitCount > videocapsList[key].BitCount)
-                        {
-                            videocapsList[key] = vc;
-                        }
-                    }
+                    hashSet.Add(vc);
                 }
                 catch
                 {
                 }
             }
-
-            VideoCapabilities[] videocaps = new VideoCapabilities[videocapsList.Count];
-            videocapsList.Values.CopyTo(videocaps, 0);
-
-            return videocaps;
+            
+            return hashSet.ToArray();
         }
 
         // Retrieve capabilities of a video device
@@ -127,10 +112,12 @@ namespace Accord.Video.DirectShow
                 if (hr != 0)
                     Marshal.ThrowExceptionForHR(hr);
 
+                SubType = mediaType.SubType;
+
                 if (mediaType.FormatType == FormatType.VideoInfo)
                 {
                     VideoInfoHeader videoInfo = (VideoInfoHeader)Marshal.PtrToStructure(mediaType.FormatPtr, typeof(VideoInfoHeader));
-
+                    
                     FrameSize = new Size(videoInfo.BmiHeader.Width, videoInfo.BmiHeader.Height);
                     BitCount = videoInfo.BmiHeader.BitCount;
                     AverageFrameRate = (int)(10000000 / videoInfo.AverageTimePerFrame);
@@ -139,7 +126,7 @@ namespace Accord.Video.DirectShow
                 else if (mediaType.FormatType == FormatType.VideoInfo2)
                 {
                     VideoInfoHeader2 videoInfo = (VideoInfoHeader2)Marshal.PtrToStructure(mediaType.FormatPtr, typeof(VideoInfoHeader2));
-
+                    
                     FrameSize = new Size(videoInfo.BmiHeader.Width, videoInfo.BmiHeader.Height);
                     BitCount = videoInfo.BmiHeader.BitCount;
                     AverageFrameRate = (int)(10000000 / videoInfo.AverageTimePerFrame);
@@ -193,17 +180,22 @@ namespace Accord.Video.DirectShow
                 return false;
             }
 
-            return ((FrameSize == vc2.FrameSize) && (BitCount == vc2.BitCount));
+            return FrameSize == vc2.FrameSize && BitCount == vc2.BitCount && SubType == vc2.SubType;
         }
 
         /// <summary>
         /// Get hash code of the object.
         /// </summary>
-        /// 
         /// <returns>Returns hash code ot the object </returns>
         public override int GetHashCode()
         {
-            return FrameSize.GetHashCode() ^ BitCount;
+            unchecked
+            {
+                var hashCode = FrameSize.GetHashCode();
+                hashCode = (hashCode * 397) ^ SubType.GetHashCode();
+                hashCode = (hashCode * 397) ^ BitCount;
+                return hashCode;
+            }
         }
 
         /// <summary>
@@ -217,7 +209,7 @@ namespace Accord.Video.DirectShow
         public static bool operator ==(VideoCapabilities a, VideoCapabilities b)
         {
             // if both are null, or both are same instance, return true.
-            if (object.ReferenceEquals(a, b))
+            if (ReferenceEquals(a, b))
             {
                 return true;
             }
@@ -250,10 +242,7 @@ namespace Accord.Video.DirectShow
         /// <returns>A <see cref="System.String" /> that represents this instance.</returns>
         public override string ToString()
         {
-            return String.Format("{0}x{1}, {2} fps ({3} max fps), {4} bpp", 
-                FrameSize.Width, FrameSize.Height,
-                AverageFrameRate, MaximumFrameRate,
-                BitCount);
+            return $"{FrameSize.Width}x{FrameSize.Height}, {AverageFrameRate} fps ({MaximumFrameRate} max fps), {BitCount} bpp";
         }
     }
 }

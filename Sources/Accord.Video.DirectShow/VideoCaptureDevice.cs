@@ -15,8 +15,8 @@ namespace Accord.Video.DirectShow
     using System.Threading;
     using System.Runtime.InteropServices;
 
-    using Accord.Video;
-    using Accord.Video.DirectShow.Internals;
+    using Video;
+    using Internals;
 
     /// <summary>
     /// Video source for local video capture device (for example USB webcam).
@@ -99,9 +99,9 @@ namespace Accord.Video.DirectShow
         private VideoInput crossbarVideoInput = VideoInput.Default;
 
         // cache for video/snapshot capabilities and video inputs
-        private static Dictionary<string, VideoCapabilities[]> cacheVideoCapabilities = new Dictionary<string, VideoCapabilities[]>();
-        private static Dictionary<string, VideoCapabilities[]> cacheSnapshotCapabilities = new Dictionary<string, VideoCapabilities[]>();
-        private static Dictionary<string, VideoInput[]> cacheCrossbarVideoInputs = new Dictionary<string, VideoInput[]>();
+        private static readonly Dictionary<string, VideoCapabilities[]> cacheVideoCapabilities = new Dictionary<string, VideoCapabilities[]>();
+        private static readonly Dictionary<string, VideoCapabilities[]> cacheSnapshotCapabilities = new Dictionary<string, VideoCapabilities[]>();
+        private static readonly Dictionary<string, VideoInput[]> cacheCrossbarVideoInputs = new Dictionary<string, VideoInput[]>();
 
         /// <summary>
         /// Current video input of capture card.
@@ -180,7 +180,7 @@ namespace Accord.Video.DirectShow
                     }
                 }
                 // don't return null even if capabilities are not provided for some reason
-                return (crossbarVideoInputs != null) ? crossbarVideoInputs : new VideoInput[0];
+                return crossbarVideoInputs ?? new VideoInput[0];
             }
         }
 
@@ -334,47 +334,6 @@ namespace Accord.Video.DirectShow
                 }
                 return false;
             }
-        }
-
-        /// <summary>
-        /// Obsolete - no longer in use
-        /// </summary>
-        /// 
-        /// <remarks><para>The property is obsolete. Use <see cref="VideoResolution"/> property instead.
-        /// Setting this property does not have any effect.</para></remarks>
-        /// 
-        [Obsolete]
-        public Size DesiredFrameSize
-        {
-            get { return Size.Empty; }
-            set { }
-        }
-
-        /// <summary>
-        /// Obsolete - no longer in use
-        /// </summary>
-        /// 
-        /// <remarks><para>The property is obsolete. Use <see cref="SnapshotResolution"/> property instead.
-        /// Setting this property does not have any effect.</para></remarks>
-        /// 
-        [Obsolete]
-        public Size DesiredSnapshotSize
-        {
-            get { return Size.Empty; }
-            set { }
-        }
-
-        /// <summary>
-        /// Obsolete - no longer in use.
-        /// </summary>
-        /// 
-        /// <remarks><para>The property is obsolete. Setting this property does not have any effect.</para></remarks>
-        /// 
-        [Obsolete]
-        public int DesiredFrameRate
-        {
-            get { return 0; }
-            set { }
         }
 
         /// <summary>
@@ -1163,8 +1122,8 @@ namespace Accord.Video.DirectShow
             bool isSnapshotSupported = false;
 
             // grabber
-            Grabber videoGrabber = new Grabber(this, false, this.pixelFormat);
-            Grabber snapshotGrabber = new Grabber(this, true, this.pixelFormat);
+            Grabber videoGrabber = new Grabber(this, false, pixelFormat);
+            Grabber snapshotGrabber = new Grabber(this, true, pixelFormat);
 
             // objects
             object captureGraphObject = null;
@@ -1174,16 +1133,16 @@ namespace Accord.Video.DirectShow
             object crossbarObject = null;
 
             // interfaces
-            ICaptureGraphBuilder2 captureGraph = null;
-            IFilterGraph2 graph = null;
-            IBaseFilter sourceBase = null;
-            IBaseFilter videoGrabberBase = null;
-            IBaseFilter snapshotGrabberBase = null;
-            ISampleGrabber videoSampleGrabber = null;
-            ISampleGrabber snapshotSampleGrabber = null;
-            IMediaControl mediaControl = null;
+            ICaptureGraphBuilder2 captureGraph;
+            IFilterGraph2 graph;
+            IBaseFilter sourceBase;
+            IBaseFilter videoGrabberBase;
+            IBaseFilter snapshotGrabberBase;
+            ISampleGrabber videoSampleGrabber;
+            ISampleGrabber snapshotSampleGrabber;
+            IMediaControl mediaControl;
             IAMVideoControl videoControl = null;
-            IMediaEventEx mediaEvent = null;
+            IMediaEventEx mediaEvent;
             IPin pinStillImage = null;
             IAMCrossbar crossbar = null;
 
@@ -1212,11 +1171,9 @@ namespace Accord.Video.DirectShow
 
                 // create source device's object
                 sourceObject = FilterInfo.CreateFilter(deviceMoniker);
-                if (sourceObject == null)
-                    throw new ApplicationException("Failed creating device object for moniker");
 
                 // get base filter interface of source device
-                sourceBase = (IBaseFilter)sourceObject;
+                sourceBase = (IBaseFilter) sourceObject ?? throw new ApplicationException("Failed creating device object for moniker");
 
                 // get video control interface of the device
                 try
@@ -1272,9 +1229,8 @@ namespace Accord.Video.DirectShow
                     // check if it support trigger mode
                     if (pinStillImage != null)
                     {
-                        VideoControlFlags caps;
-                        videoControl.GetCaps(pinStillImage, out caps);
-                        isSnapshotSupported = ((caps & (VideoControlFlags.ExternalTriggerEnable | VideoControlFlags.Trigger)) != 0);
+                        videoControl.GetCaps(pinStillImage, out VideoControlFlags caps);
+                        isSnapshotSupported = (caps & (VideoControlFlags.ExternalTriggerEnable | VideoControlFlags.Trigger)) != 0;
                     }
                 }
 
@@ -1304,14 +1260,14 @@ namespace Accord.Video.DirectShow
                 // put video/snapshot capabilities into cache
                 lock (cacheVideoCapabilities)
                 {
-                    if ((videoCapabilities != null) && (!cacheVideoCapabilities.ContainsKey(deviceMoniker)))
+                    if (videoCapabilities != null && !cacheVideoCapabilities.ContainsKey(deviceMoniker))
                     {
                         cacheVideoCapabilities.Add(deviceMoniker, videoCapabilities);
                     }
                 }
                 lock (cacheSnapshotCapabilities)
                 {
-                    if ((snapshotCapabilities != null) && (!cacheSnapshotCapabilities.ContainsKey(deviceMoniker)))
+                    if (snapshotCapabilities != null && !cacheSnapshotCapabilities.ContainsKey(deviceMoniker))
                     {
                         cacheSnapshotCapabilities.Add(deviceMoniker, snapshotCapabilities);
                     }
@@ -1501,12 +1457,10 @@ namespace Accord.Video.DirectShow
             }
 
             // iterate through device's capabilities to find mediaType for desired resolution
-            int capabilitiesCount = 0, capabilitySize = 0;
             AMMediaType newMediaType = null;
             VideoStreamConfigCaps caps = new VideoStreamConfigCaps();
 
-            streamConfig.GetNumberOfCapabilities(out capabilitiesCount, out capabilitySize);
-
+            streamConfig.GetNumberOfCapabilities(out int capabilitiesCount, out _);
             for (int i = 0; i < capabilitiesCount; i++)
             {
                 try
@@ -1538,9 +1492,8 @@ namespace Accord.Video.DirectShow
         private void GetPinCapabilitiesAndConfigureSizeAndRate(ICaptureGraphBuilder2 graphBuilder, IBaseFilter baseFilter,
             Guid pinCategory, VideoCapabilities resolutionToSet, ref VideoCapabilities[] capabilities)
         {
-            object streamConfigObject;
-            graphBuilder.FindInterface(pinCategory, MediaType.Video, baseFilter, typeof(IAMStreamConfig).GUID, out streamConfigObject);
-
+            graphBuilder.FindInterface(pinCategory, MediaType.Video, baseFilter, typeof(IAMStreamConfig).GUID, out var streamConfigObject);
+            
             if (streamConfigObject != null)
             {
                 IAMStreamConfig streamConfig = null;
@@ -1560,7 +1513,7 @@ namespace Accord.Video.DirectShow
                         try
                         {
                             // get all video capabilities
-                            capabilities = Accord.Video.DirectShow.VideoCapabilities.FromStreamConfig(streamConfig);
+                            capabilities = DirectShow.VideoCapabilities.FromStreamConfig(streamConfig);
                         }
                         catch
                         {
