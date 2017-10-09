@@ -20,6 +20,15 @@ namespace Accord.Video
     public delegate void NewFrameEventHandler( object sender, NewFrameEventArgs eventArgs );
 
     /// <summary>
+    /// Delegate for new frame data event handler.
+    /// </summary>
+    /// 
+    /// <param name="sender">Sender object.</param>
+    /// <param name="eventArgs">Event arguments.</param>
+    /// 
+    public delegate void NewFrameDataEventHandler(object sender, FrameDataEventArgs eventArgs);
+
+    /// <summary>
     /// Delegate for video source error event handler.
     /// </summary>
     /// 
@@ -120,6 +129,50 @@ namespace Accord.Video
         public string Description
         {
             get { return description; }
+        }
+    }
+
+    /// <summary>
+    /// Frame data event args
+    /// </summary>
+    public class FrameDataEventArgs : EventArgs
+    {
+        /// <summary>
+        /// Height
+        /// </summary>
+        public int Height { get; }
+        /// <summary>
+        /// Width
+        /// </summary>
+        public int Width { get; }
+        /// <summary>
+        /// Stride
+        /// </summary>
+        public int Stride { get; }
+        /// <summary>
+        /// Buffer
+        /// </summary>
+        public IntPtr Buffer { get; }
+        /// <summary>
+        /// Buffer Length
+        /// </summary>
+        public int BufferLength { get; }
+
+        /// <summary>
+        /// Frame data event args
+        /// </summary>
+        /// <param name="height">height</param>
+        /// <param name="width">width</param>
+        /// <param name="stride">stride</param>
+        /// <param name="buffer">buffer</param>
+        /// <param name="bufferLength">buffer length</param>
+        public FrameDataEventArgs(int height, int width, int stride, IntPtr buffer, int bufferLength)
+        {
+            Height = height;
+            Width = width;
+            Stride = stride;
+            Buffer = buffer;
+            BufferLength = bufferLength;
         }
     }
 }

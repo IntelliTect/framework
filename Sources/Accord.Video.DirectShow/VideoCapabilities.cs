@@ -2,7 +2,7 @@
 // AForge.NET framework
 // http://www.aforgenet.com/framework/
 //
-// Copyright © AForge.NET, 2009-2013
+// Copyright ï¿½ AForge.NET, 2009-2013
 // contacts@aforgenet.com
 //
 
@@ -50,6 +50,9 @@ namespace Accord.Video.DirectShow
         /// </summary>
         public readonly int MaximumFrameRate;
 
+        /// <summary>
+        /// The sub type id
+        /// </summary>
         public readonly Guid SubType;
 
         /// <summary>

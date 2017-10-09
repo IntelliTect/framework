@@ -6,6 +6,8 @@
 // contacts@aforgenet.com
 //
 
+using System.Runtime.CompilerServices;
+
 namespace Accord.Video.DirectShow
 {
     using System;
@@ -222,6 +224,11 @@ namespace Accord.Video.DirectShow
         public event NewFrameEventHandler NewFrame;
 
         /// <summary>
+        /// Raised when there is new frame data to be processed.
+        /// </summary>
+        public event NewFrameDataEventHandler NewFrameData;
+
+        /// <summary>
         /// Snapshot frame event.
         /// </summary>
         /// 
@@ -238,6 +245,11 @@ namespace Accord.Video.DirectShow
         /// <seealso cref="ProvideSnapshots"/>
         /// 
         public event NewFrameEventHandler SnapshotFrame;
+
+        /// <summary>
+        /// Raised when there is a new snapshot frame data to be processed.
+        /// </summary>
+        public event NewFrameDataEventHandler SnapshotFrameData;
 
         /// <summary>
         /// Video source error event.
@@ -1042,7 +1054,7 @@ namespace Accord.Video.DirectShow
 
                 IAMVideoProcAmp pCamControl = (IAMVideoProcAmp)tempSourceObject;
                 int hr = pCamControl.Get(property, out value, out controlFlags);
-                
+
                 ret = hr >= 0;
 
                 Marshal.ReleaseComObject(tempSourceObject);
@@ -1173,7 +1185,7 @@ namespace Accord.Video.DirectShow
                 sourceObject = FilterInfo.CreateFilter(deviceMoniker);
 
                 // get base filter interface of source device
-                sourceBase = (IBaseFilter) sourceObject ?? throw new ApplicationException("Failed creating device object for moniker");
+                sourceBase = (IBaseFilter)sourceObject ?? throw new ApplicationException("Failed creating device object for moniker");
 
                 // get video control interface of the device
                 try
@@ -1493,7 +1505,7 @@ namespace Accord.Video.DirectShow
             Guid pinCategory, VideoCapabilities resolutionToSet, ref VideoCapabilities[] capabilities)
         {
             graphBuilder.FindInterface(pinCategory, MediaType.Video, baseFilter, typeof(IAMStreamConfig).GUID, out var streamConfigObject);
-            
+
             if (streamConfigObject != null)
             {
                 IAMStreamConfig streamConfig = null;
@@ -1715,7 +1727,7 @@ namespace Accord.Video.DirectShow
         private void OnNewFrame(Bitmap image)
         {
             framesReceived++;
-            bytesReceived += image.Width * image.Height * (Bitmap.GetPixelFormatSize(image.PixelFormat) >> 3);
+            bytesReceived += image.Width * image.Height * (Image.GetPixelFormatSize(image.PixelFormat) >> 3);
 
             if ((!stopEvent.WaitOne(0, false)) && (NewFrame != null))
                 NewFrame(this, new NewFrameEventArgs(image));
@@ -1745,30 +1757,31 @@ namespace Accord.Video.DirectShow
         //
         private class Grabber : ISampleGrabberCB
         {
-            private VideoCaptureDevice parent;
-            private bool snapshotMode;
-            private int width, height;
-            private PixelFormat pixelFormat;
+            private readonly VideoCaptureDevice _parent;
+            private readonly bool _snapshotMode;
+            private readonly PixelFormat _pixelFormat;
 
             // Width property
-            public int Width
-            {
-                get { return width; }
-                set { width = value; }
-            }
+            public int Width { get; set; }
+
             // Height property
-            public int Height
+            public int Height { get; set; }
+
+            private int Stride
             {
-                get { return height; }
-                set { height = value; }
+                [MethodImpl(MethodImplOptions.AggressiveInlining)]
+                get
+                {
+                    return 4 * ((Width * (((((int)_pixelFormat & 0xff00) >> 8) + 7) / 8) + 3) / 4);
+                }
             }
 
             // Constructor
             public Grabber(VideoCaptureDevice parent, bool snapshotMode, PixelFormat pixelFormat = PixelFormat.Format24bppRgb)
             {
-                this.parent = parent;
-                this.snapshotMode = snapshotMode;
-                this.pixelFormat = pixelFormat;
+                _parent = parent;
+                _snapshotMode = snapshotMode;
+                _pixelFormat = pixelFormat;
             }
 
             // Callback to receive samples
@@ -1780,16 +1793,16 @@ namespace Accord.Video.DirectShow
             // Callback method that receives a pointer to the sample buffer
             public int BufferCB(double sampleTime, IntPtr buffer, int bufferLen)
             {
-                if (parent.NewFrame != null)
+                if (_parent.NewFrame != null)
                 {
                     // create new image
-                    System.Drawing.Bitmap image = new Bitmap(width, height, this.pixelFormat);
+                    Bitmap image = new Bitmap(Width, Height, _pixelFormat);
 
                     // lock bitmap data
                     BitmapData imageData = image.LockBits(
-                        new Rectangle(0, 0, width, height),
+                        new Rectangle(0, 0, Width, Height),
                         ImageLockMode.ReadWrite,
-                        this.pixelFormat);
+                        _pixelFormat);
 
                     // copy image data
                     int srcStride = imageData.Stride;
@@ -1797,10 +1810,10 @@ namespace Accord.Video.DirectShow
 
                     unsafe
                     {
-                        byte* dst = (byte*)imageData.Scan0.ToPointer() + dstStride * (height - 1);
+                        byte* dst = (byte*)imageData.Scan0.ToPointer() + dstStride * (Height - 1);
                         byte* src = (byte*)buffer.ToPointer();
 
-                        for (int y = 0; y < height; y++)
+                        for (int y = 0; y < Height; y++)
                         {
                             Win32.memcpy(dst, src, srcStride);
                             dst -= dstStride;
@@ -1812,17 +1825,25 @@ namespace Accord.Video.DirectShow
                     image.UnlockBits(imageData);
 
                     // notify parent
-                    if (snapshotMode)
+                    if (_snapshotMode)
                     {
-                        parent.OnSnapshotFrame(image);
+                        _parent.OnSnapshotFrame(image);
                     }
                     else
                     {
-                        parent.OnNewFrame(image);
+                        _parent.OnNewFrame(image);
                     }
 
                     // release the image
                     image.Dispose();
+                }
+                if (_snapshotMode)
+                {
+                    _parent.SnapshotFrameData?.Invoke(_parent, new FrameDataEventArgs(Height, Width, Stride, buffer, bufferLen));
+                }
+                else
+                {
+                    _parent.NewFrameData?.Invoke(_parent, new FrameDataEventArgs(Height, Width, Stride, buffer, bufferLen));
                 }
 
                 return 0;

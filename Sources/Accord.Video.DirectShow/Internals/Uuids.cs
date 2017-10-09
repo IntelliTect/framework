@@ -2,7 +2,7 @@
 // AForge.NET framework
 // http://www.aforgenet.com/framework/
 //
-// Copyright © AForge.NET, 2009-2013
+// Copyright ï¿½ AForge.NET, 2009-2013
 // contacts@aforgenet.com
 //
 
@@ -310,6 +310,11 @@ namespace Accord.Video.DirectShow.Internals
             { Asf, nameof(Asf) },
         };
 
+        /// <summary>
+        /// Get the display name for the type
+        /// </summary>
+        /// <param name="subType"></param>
+        /// <returns>The display name</returns>
         public static string GetDisplayName(Guid subType)
         {
             if (IdNames.TryGetValue(subType, out string name))
